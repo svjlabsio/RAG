@@ -1,4 +1,5 @@
 import os
+import threading
 from contextlib import contextmanager
 
 import psycopg2
@@ -8,12 +9,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _pool = None
+_pool_lock = threading.Lock()
 
 
 def _get_pool():
     global _pool
     if _pool is None:
-        _pool = pool.ThreadedConnectionPool(1, 5, os.environ["DATABASE_URL"])
+        with _pool_lock:
+            if _pool is None:
+                _pool = pool.ThreadedConnectionPool(1, 5, os.environ["DATABASE_URL"])
     return _pool
 
 
@@ -32,7 +36,13 @@ def db_conn():
         yield conn
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        return_conn(conn)
+        if conn.closed:
+            _get_pool().putconn(conn, close=True)
+        else:
+            return_conn(conn)
