@@ -1,12 +1,16 @@
 import numpy as np
 from pgvector.psycopg2 import register_vector
 
+_registered_conns: set[int] = set()
+
 VECTOR_SEARCH_SQL = """
+    WITH q AS (SELECT %s::vector AS vec)
     SELECT c.id, c.content, c.chunk_index, d.filename,
-           1 - (c.embedding <=> %s::vector) AS vector_score
+           1 - (c.embedding <=> q.vec) AS vector_score
     FROM chunks c
     JOIN documents d ON d.id = c.doc_id
-    ORDER BY c.embedding <=> %s::vector
+    CROSS JOIN q
+    ORDER BY c.embedding <=> q.vec
     LIMIT %s
 """
 
@@ -22,9 +26,12 @@ BM25_SEARCH_SQL = """
 
 
 def vector_search(conn, query_embedding: np.ndarray, k: int = 20) -> list[dict]:
-    register_vector(conn)
+    conn_id = id(conn)
+    if conn_id not in _registered_conns:
+        register_vector(conn)
+        _registered_conns.add(conn_id)
     with conn.cursor() as cur:
-        cur.execute(VECTOR_SEARCH_SQL, (query_embedding.tolist(), query_embedding.tolist(), k))
+        cur.execute(VECTOR_SEARCH_SQL, (query_embedding.tolist(), k))
         cols = [d[0] for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -46,7 +53,7 @@ def reciprocal_rank_fusion(
     for rank, result in enumerate(vector_results):
         chunk_id = result["id"]
         if chunk_id not in scores:
-            scores[chunk_id] = {**result, "rrf_score": 0.0, "vector_rank": None, "bm25_rank": None, "bm25_score": None}
+            scores[chunk_id] = {**result, "rrf_score": 0.0, "vector_rank": None, "bm25_rank": None, "bm25_score": 0.0}
         scores[chunk_id]["rrf_score"] += 1.0 / (k + rank + 1)
         scores[chunk_id]["vector_rank"] = rank + 1
         scores[chunk_id]["vector_score"] = result.get("vector_score", 0.0)
@@ -54,7 +61,7 @@ def reciprocal_rank_fusion(
     for rank, result in enumerate(bm25_results):
         chunk_id = result["id"]
         if chunk_id not in scores:
-            scores[chunk_id] = {**result, "rrf_score": 0.0, "vector_rank": None, "bm25_rank": None, "vector_score": None}
+            scores[chunk_id] = {**result, "rrf_score": 0.0, "vector_rank": None, "bm25_rank": None, "vector_score": 0.0}
         scores[chunk_id]["rrf_score"] += 1.0 / (k + rank + 1)
         scores[chunk_id]["bm25_rank"] = rank + 1
         scores[chunk_id]["bm25_score"] = result.get("bm25_score", 0.0)

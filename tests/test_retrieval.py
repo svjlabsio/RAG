@@ -22,9 +22,14 @@ def test_rrf_combines_results_from_both_lists():
 
 
 def test_rrf_deduplicates_same_chunk():
-    result = {"id": "x", "content": "foo", "vector_score": 0.9}
+    result = {"id": "x", "content": "foo", "vector_score": 0.9, "bm25_score": 0.8}
     merged = reciprocal_rank_fusion([result], [result], k=60)
     assert len([r for r in merged if r["id"] == "x"]) == 1
+    x = merged[0]
+    assert x["id"] == "x"
+    expected_score = 1.0 / (60 + 0 + 1) + 1.0 / (60 + 0 + 1)
+    assert abs(x["rrf_score"] - expected_score) < 1e-9
+    assert x["vector_score"] == 0.9
 
 
 def test_rrf_returns_sorted_by_score_descending():
@@ -56,13 +61,13 @@ def test_hybrid_search_returns_results_with_debug():
 
     with db_conn() as conn:
         doc_id = store_document(conn, "test_retrieval.txt", "txt", chunks, embeddings)
-        results, debug = hybrid_search(conn, "retrieval augmented generation", top_k=3)
-
-        assert len(results) > 0
-        assert "rrf_score" in results[0]
-        assert "content" in results[0]
-        assert "vector_search_sql" in debug
-        assert "bm25_search_sql" in debug
-
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM documents WHERE id = %s", (str(doc_id),))
+        try:
+            results, debug = hybrid_search(conn, "retrieval augmented generation", top_k=3)
+            assert len(results) > 0
+            assert "rrf_score" in results[0]
+            assert "content" in results[0]
+            assert "vector_search_sql" in debug
+            assert "bm25_search_sql" in debug
+        finally:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM documents WHERE id = %s", (str(doc_id),))
