@@ -1,8 +1,7 @@
 import os
 
-import numpy as np
 import pytest
-from rag.ingest import parse_document, chunk_text
+from rag.ingest import parse_document, chunk_text, embed_chunks
 
 
 def test_chunk_text_single_chunk_under_limit():
@@ -62,13 +61,11 @@ def test_parse_document_unknown_extension_raises():
 
 
 def test_embed_chunks_returns_correct_shape():
-    from rag.ingest import embed_chunks
     embeddings = embed_chunks(["hello world", "foo bar baz"])
     assert embeddings.shape == (2, 384)
 
 
 def test_embed_chunks_single():
-    from rag.ingest import embed_chunks
     embeddings = embed_chunks(["single sentence"])
     assert embeddings.shape == (1, 384)
 
@@ -92,5 +89,6 @@ def test_store_document_inserts_rows():
             cur.execute("SELECT COUNT(*) FROM chunks WHERE doc_id = %s", (str(doc_id),))
             assert cur.fetchone()[0] == len(chunks)
 
-            # cleanup
+            # On assertion failure, db_conn()'s rollback handles cleanup automatically.
+            # This explicit DELETE runs on success to keep the test DB clean.
             cur.execute("DELETE FROM documents WHERE id = %s", (str(doc_id),))
