@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from db.connection import db_conn
-from rag.generation import generate_answer
+from rag.generation import generate_answer, suggest_questions
 from rag.ingest import chunk_text, embed_chunks, parse_document, store_document
 from rag.retrieval import hybrid_search, reciprocal_rank_fusion
 
@@ -75,6 +75,14 @@ def run_ingest(file_bytes: bytes, filename: str):
     col1.metric("Chunks", len(chunks))
     col2.metric("Embed time", f"{embed_time:.2f}s")
     col3.metric("DB insert", f"{insert_time:.2f}s")
+
+    with st.spinner("Generating suggested questions..."):
+        chunk_dicts = [{"content": c} for c in chunks]
+        questions = suggest_questions(filename, chunk_dicts)
+    if questions:
+        st.markdown("**💡 Questions you can ask about this document:**")
+        for q in questions:
+            st.markdown(f"- {q}")
 
     with st.expander("⚙️ How ingestion works"):
         st.subheader("1. Chunking — fixed-size sliding window")

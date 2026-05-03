@@ -39,6 +39,21 @@ def build_prompt(question: str, chunks: list[dict]) -> str:
     return f"Context:\n{context}\n\nQuestion: {question}"
 
 
+def suggest_questions(filename: str, chunks: list[dict]) -> list[str]:
+    client = _get_client()
+    sample = "\n\n".join(c["content"] for c in chunks[:5])
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=256,
+        system="You generate concise, specific questions a reader would want answered based on a document excerpt. Return exactly 4 questions, one per line, no numbering, no bullet points.",
+        messages=[{"role": "user", "content": f"Document: {filename}\n\nExcerpt:\n{sample}\n\nGenerate 4 questions."}],
+    )
+    text_blocks = [b for b in response.content if b.type == "text"]
+    if not text_blocks:
+        return []
+    return [q.strip() for q in text_blocks[0].text.strip().splitlines() if q.strip()]
+
+
 def generate_answer(question: str, chunks: list[dict]) -> tuple[str, dict]:
     client = _get_client()
     prompt = build_prompt(question, chunks)
