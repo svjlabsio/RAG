@@ -2,9 +2,6 @@ import os
 import time
 
 import anthropic
-from dotenv import load_dotenv
-
-load_dotenv()
 
 MODEL = "claude-haiku-4-5-20251001"
 
@@ -13,6 +10,18 @@ SYSTEM_PROMPT = (
     "context chunks. If the answer is not in the context, say "
     "'I don't have enough context to answer that.' Be concise and technical."
 )
+
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+        _client = anthropic.Anthropic(api_key=api_key)
+    return _client
 
 
 def build_prompt(question: str, chunks: list[dict]) -> str:
@@ -27,7 +36,7 @@ def build_prompt(question: str, chunks: list[dict]) -> str:
 
 
 def generate_answer(question: str, chunks: list[dict]) -> tuple[str, dict]:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = _get_client()
     prompt = build_prompt(question, chunks)
 
     start = time.time()
@@ -39,8 +48,11 @@ def generate_answer(question: str, chunks: list[dict]) -> tuple[str, dict]:
     )
     latency_ms = int((time.time() - start) * 1000)
 
-    return response.content[0].text, {
-        "model": MODEL,
+    text_blocks = [b for b in response.content if hasattr(b, "text")]
+    if not text_blocks:
+        raise ValueError(f"No text content in Claude response: {response.content}")
+    return text_blocks[0].text, {
+        "model": response.model,
         "input_tokens": response.usage.input_tokens,
         "output_tokens": response.usage.output_tokens,
         "latency_ms": latency_ms,
