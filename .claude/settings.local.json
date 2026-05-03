@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\sasva\\\\Documents\\\\work\\\\nl2sql\" -Recurse -Force | Where-Object { $_.Extension -match '\\\\.\\(json|txt|py|js|ts|yml|yaml|md|lock|toml|ini|env\\)$' -or $_.PSIsContainer } | Select-Object -Property FullName)",
+      "WebFetch(domain:supabase.com)",
+      "Bash(git *)"
+    ]
+  }
+}
