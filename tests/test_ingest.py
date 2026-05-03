@@ -33,3 +33,26 @@ def test_parse_document_markdown():
     result = parse_document(b"# Title\n\nSome content here.", "test.md")
     assert "Title" in result
     assert "Some content here" in result
+
+
+def test_chunk_text_empty_string():
+    assert chunk_text("") == []
+
+
+def test_chunk_text_exact_boundary():
+    # Text exactly equal to chunk_size still produces a second chunk because
+    # the window advances by (chunk_size - overlap), so start=462 < 512.
+    text = "a" * 512
+    chunks = chunk_text(text, chunk_size=512, overlap=50)
+    assert chunks[0] == text          # first chunk is the full text
+    assert chunks[-1] == text[462:]   # last chunk is the tail overlap
+
+
+def test_chunk_text_invalid_overlap_raises():
+    with pytest.raises(ValueError, match="overlap"):
+        chunk_text("some text", chunk_size=50, overlap=50)
+
+
+def test_parse_document_unknown_extension_raises():
+    with pytest.raises(ValueError, match="Unsupported"):
+        parse_document(b"binary data", "file.xyz")
