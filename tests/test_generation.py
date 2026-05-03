@@ -1,3 +1,5 @@
+import pytest
+
 from rag.generation import build_prompt
 
 
@@ -60,7 +62,6 @@ def test_generate_answer_calls_claude(mocker, reset_generation_client):
 
 def test_generate_answer_raises_on_no_text_blocks(mocker, reset_generation_client):
     import rag.generation as gen_module
-    import pytest
 
     mocker.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
     mock_anthropic = mocker.patch("rag.generation.anthropic.Anthropic")
