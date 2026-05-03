@@ -25,38 +25,50 @@ def test_build_prompt_no_chunks():
     assert "No context" in prompt
 
 
-def test_generate_answer_calls_claude(mocker):
+def test_generate_answer_calls_claude(mocker, reset_generation_client):
     import rag.generation as gen_module
-    from rag.generation import generate_answer, MODEL, SYSTEM_PROMPT
-
-    # Reset the singleton so the mock is picked up
-    gen_module._client = None
 
     mocker.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
     mock_anthropic = mocker.patch("rag.generation.anthropic.Anthropic")
     mock_response = mocker.MagicMock()
-    mock_response.content = [mocker.MagicMock(text="The answer is 42.")]
+    mock_block = mocker.MagicMock()
+    mock_block.type = "text"
+    mock_block.text = "The answer is 42."
+    mock_response.content = [mock_block]
     mock_response.usage.input_tokens = 100
     mock_response.usage.output_tokens = 10
-    mock_response.model = MODEL
+    mock_response.model = gen_module.MODEL
     mock_anthropic.return_value.messages.create.return_value = mock_response
 
     chunks = [{"content": "The answer is 42.", "filename": "test.txt", "chunk_index": 0}]
-    answer, meta = generate_answer("What is the answer?", chunks)
+    answer, meta = gen_module.generate_answer("What is the answer?", chunks)
 
     assert answer == "The answer is 42."
     assert meta["input_tokens"] == 100
     assert meta["output_tokens"] == 10
-    assert meta["model"] == MODEL
+    assert meta["model"] == gen_module.MODEL
     assert "latency_ms" in meta
     assert "prompt" in meta
 
     mock_anthropic.return_value.messages.create.assert_called_once_with(
-        model=MODEL,
+        model=gen_module.MODEL,
         max_tokens=1024,
-        system=SYSTEM_PROMPT,
+        system=gen_module.SYSTEM_PROMPT,
         messages=[{"role": "user", "content": mocker.ANY}],
     )
 
-    # Clean up singleton so other tests are not affected
-    gen_module._client = None
+
+def test_generate_answer_raises_on_no_text_blocks(mocker, reset_generation_client):
+    import rag.generation as gen_module
+    import pytest
+
+    mocker.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
+    mock_anthropic = mocker.patch("rag.generation.anthropic.Anthropic")
+    mock_response = mocker.MagicMock()
+    tool_block = mocker.MagicMock()
+    tool_block.type = "tool_use"
+    mock_response.content = [tool_block]
+    mock_anthropic.return_value.messages.create.return_value = mock_response
+
+    with pytest.raises(ValueError, match="No text content"):
+        gen_module.generate_answer("q", [{"content": "x", "filename": "f.txt", "chunk_index": 0}])
