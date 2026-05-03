@@ -1,3 +1,6 @@
+import os
+
+import numpy as np
 import pytest
 from rag.ingest import parse_document, chunk_text
 
@@ -56,3 +59,38 @@ def test_chunk_text_invalid_overlap_raises():
 def test_parse_document_unknown_extension_raises():
     with pytest.raises(ValueError, match="Unsupported"):
         parse_document(b"binary data", "file.xyz")
+
+
+def test_embed_chunks_returns_correct_shape():
+    from rag.ingest import embed_chunks
+    embeddings = embed_chunks(["hello world", "foo bar baz"])
+    assert embeddings.shape == (2, 384)
+
+
+def test_embed_chunks_single():
+    from rag.ingest import embed_chunks
+    embeddings = embed_chunks(["single sentence"])
+    assert embeddings.shape == (1, 384)
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="requires DATABASE_URL")
+def test_store_document_inserts_rows():
+    from rag.ingest import chunk_text, embed_chunks, store_document
+    from db.connection import db_conn
+
+    text = "This is a test document about retrieval augmented generation."
+    chunks = chunk_text(text, chunk_size=50, overlap=10)
+    embeddings = embed_chunks(chunks)
+
+    with db_conn() as conn:
+        doc_id = store_document(conn, "test_doc.txt", "txt", chunks, embeddings)
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT chunk_count FROM documents WHERE id = %s", (str(doc_id),))
+            assert cur.fetchone()[0] == len(chunks)
+
+            cur.execute("SELECT COUNT(*) FROM chunks WHERE doc_id = %s", (str(doc_id),))
+            assert cur.fetchone()[0] == len(chunks)
+
+            # cleanup
+            cur.execute("DELETE FROM documents WHERE id = %s", (str(doc_id),))
