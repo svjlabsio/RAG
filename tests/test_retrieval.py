@@ -32,6 +32,16 @@ def test_rrf_deduplicates_same_chunk():
     assert x["vector_score"] == 0.9
 
 
+def test_rrf_cross_list_score_defaults_to_zero():
+    v_only = {"id": "v", "content": "v-only", "vector_score": 0.9}
+    b_only = {"id": "b", "content": "b-only", "bm25_score": 0.7}
+    results = reciprocal_rank_fusion([v_only], [b_only], k=60)
+    v_result = next(r for r in results if r["id"] == "v")
+    b_result = next(r for r in results if r["id"] == "b")
+    assert v_result["bm25_score"] == 0.0
+    assert b_result["vector_score"] == 0.0
+
+
 def test_rrf_returns_sorted_by_score_descending():
     vector_results = [{"id": str(i), "content": f"c{i}", "vector_score": 0.9 - i * 0.1} for i in range(3)]
     bm25_results = [{"id": str(i), "content": f"c{i}", "bm25_score": 0.9 - i * 0.1} for i in range(3)]

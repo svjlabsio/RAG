@@ -1,7 +1,8 @@
+import weakref
 import numpy as np
 from pgvector.psycopg2 import register_vector
 
-_registered_conns: set[int] = set()
+_registered_conns: weakref.WeakSet = weakref.WeakSet()
 
 VECTOR_SEARCH_SQL = """
     WITH q AS (SELECT %s::vector AS vec)
@@ -26,10 +27,9 @@ BM25_SEARCH_SQL = """
 
 
 def vector_search(conn, query_embedding: np.ndarray, k: int = 20) -> list[dict]:
-    conn_id = id(conn)
-    if conn_id not in _registered_conns:
+    if conn not in _registered_conns:
         register_vector(conn)
-        _registered_conns.add(conn_id)
+        _registered_conns.add(conn)
     with conn.cursor() as cur:
         cur.execute(VECTOR_SEARCH_SQL, (query_embedding.tolist(), k))
         cols = [d[0] for d in cur.description]
