@@ -1,4 +1,5 @@
 import inspect
+import pathlib
 import time
 
 import streamlit as st
@@ -41,10 +42,12 @@ st.caption("Hybrid RAG pipeline demo — pgvector cosine + PostgreSQL BM25 + Rec
 
 tab_ingest, tab_query = st.tabs(["📥 Ingest", "🔍 Query"])
 
+_HERE = pathlib.Path(__file__).parent
+
 SAMPLE_DOCS = {
-    "rag_guide.md": "sample_docs/rag_guide.md",
-    "system_design.txt": "sample_docs/system_design.txt",
-    "distributed_systems.txt": "sample_docs/distributed_systems.txt",
+    "rag_guide.md":            _HERE / "sample_docs" / "rag_guide.md",
+    "system_design.txt":       _HERE / "sample_docs" / "system_design.txt",
+    "distributed_systems.txt": _HERE / "sample_docs" / "distributed_systems.txt",
 }
 
 
@@ -111,14 +114,20 @@ with tab_ingest:
     st.subheader("Upload a document")
     uploaded = st.file_uploader("PDF, TXT, MD, or DOCX", type=["pdf", "txt", "md", "docx"])
     if uploaded:
-        run_ingest(uploaded.read(), uploaded.name)
+        try:
+            run_ingest(uploaded.read(), uploaded.name)
+        except Exception as e:
+            st.error(f"Ingest failed: {e}")
 
     st.subheader("Or load a sample")
     cols = st.columns(3)
     for i, (name, path) in enumerate(SAMPLE_DOCS.items()):
         if cols[i].button(f"📄 {name}"):
-            with open(path, "rb") as f:
-                run_ingest(f.read(), name)
+            try:
+                with open(path, "rb") as f:
+                    run_ingest(f.read(), name)
+            except Exception as e:
+                st.error(f"Ingest failed: {e}")
 
     st.subheader("Indexed documents")
     try:
@@ -206,7 +215,7 @@ without discarding lower-ranked results. A chunk appearing in both lists scores 
                         "Vector score": round(c.get("vector_score") or 0, 4),
                         "BM25 rank": c.get("bm25_rank") or "—",
                         "RRF score": round(c["rrf_score"], 6),
-                        "Content (truncated)": c["content"][:120] + "...",
+                        "Content (truncated)": c["content"][:120] + ("..." if len(c["content"]) > 120 else ""),
                     }
                     for c in chunks
                 ],
