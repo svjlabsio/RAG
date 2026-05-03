@@ -1,0 +1,45 @@
+System Design Concepts: A Technical Reference
+
+CAP THEOREM
+
+The CAP theorem, formulated by Eric Brewer in 2000 and proved by Gilbert and Lynch in 2002,
+states that a distributed system can satisfy at most two of three properties: Consistency (every
+read receives the most recent write), Availability (every request receives a non-error response),
+and Partition tolerance (the system continues operating despite network partitions). Since network
+partitions are unavoidable in distributed systems, practical systems choose between CP (consistent
+and partition-tolerant) and AP (available and partition-tolerant). CP systems like HBase and
+Zookeeper block or return errors during a partition to preserve consistency. AP systems like
+Cassandra and DynamoDB continue serving requests during partitions, accepting that different nodes
+may return stale data.
+
+CONSISTENT HASHING
+
+Consistent hashing solves the data redistribution problem in distributed caches and databases.
+In a naive hash ring, adding or removing a node requires remapping roughly 1/N of all keys. In
+consistent hashing, both nodes and keys are mapped to positions on a circular ring using the same
+hash function. Each key is owned by the nearest node clockwise on the ring. When a node is added,
+only the keys between the new node and its predecessor move — approximately 1/N of the total.
+Virtual nodes (vnodes) improve load distribution by assigning each physical node multiple positions
+on the ring. Cassandra uses 256 vnodes per node by default.
+
+BLOOM FILTERS
+
+A Bloom filter is a probabilistic data structure that tests set membership in O(1) time and O(m)
+space, where m is the bit array size. It admits false positives (reporting an element is in the
+set when it is not) but never false negatives (never misses an actual member). The false positive
+rate is approximately (1 - e^(-kn/m))^k, where k is the number of hash functions and n is the
+number of inserted elements. LSM-tree databases like RocksDB and Cassandra use Bloom filters on
+SSTable files to avoid disk reads for keys that do not exist in a given file, dramatically reducing
+read amplification.
+
+LSM TREES
+
+Log-Structured Merge trees optimize for write throughput. Writes are buffered in an in-memory
+structure (memtable), typically a red-black tree or skip list. When the memtable reaches its size
+threshold, it is flushed to disk as a sorted, immutable SSTable file. Reads must check the memtable
+and all on-disk SSTables, consulting the most recent level first. To bound read costs, LSM trees
+periodically merge and compact SSTables, discarding obsolete versions of overwritten keys.
+Compaction strategies — leveled, tiered, and FIFO — trade read amplification against write
+amplification. Leveled compaction (used by RocksDB by default) keeps SSTables non-overlapping
+within a level, guaranteeing at most one SSTable per level contains a given key, which improves
+read performance at the cost of more compaction I/O.

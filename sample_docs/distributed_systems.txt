@@ -1,0 +1,48 @@
+Distributed Systems Internals: A Technical Reference
+
+RAFT CONSENSUS
+
+Raft is a consensus algorithm designed to be more understandable than Paxos. A Raft cluster elects
+a leader using randomized election timeouts (typically 150-300ms). Each server starts as a follower.
+If a follower receives no heartbeat within its timeout, it becomes a candidate, increments its term,
+votes for itself, and sends RequestVote RPCs to peers. A candidate wins if it receives votes from a
+majority. The leader then handles all client requests, appending entries to its log and replicating
+them to followers via AppendEntries RPCs. An entry is committed once a majority of nodes have
+written it to their logs. The log matching property guarantees that if two logs have the same entry
+at the same index, all preceding entries are also identical. Leader crashes trigger a new election;
+the new leader must have the most up-to-date log among the quorum that elects it.
+
+VECTOR CLOCKS
+
+Vector clocks track causal relationships in distributed systems without synchronized physical clocks.
+Each node maintains a vector of counters, one per node. On a local event, a node increments its own
+counter. On a send event, the current vector is attached to the message. On receive, each element is
+set to the maximum of the local and received vectors, then the local counter is incremented. Two
+events A and B have a happened-before relationship (A -> B) if A's vector is component-wise less than
+or equal to B's vector with at least one strictly less component. If neither A -> B nor B -> A, the
+events are concurrent and represent a potential conflict. Vector clocks detect concurrency but do not
+resolve it — conflict resolution is application-specific (e.g., last-write-wins or merge functions).
+
+CRDTS
+
+Conflict-free Replicated Data Types (CRDTs) are data structures that guarantee convergence: all
+replicas that receive the same set of updates, in any order, reach the same state. A G-Counter
+(grow-only counter) is the simplest example: each node maintains its own counter, increments only
+its own slot, and the global count is the sum of all slots. Merging two G-Counters takes the
+component-wise maximum. A LWW-Register (last-write-wins) attaches a timestamp to each write;
+merge picks the entry with the higher timestamp. The convergence guarantee holds because all CRDT
+merge operations are commutative, associative, and idempotent — properties that make network
+reorder and retry safe. CRDTs are used in systems like Redis (HyperLogLog), Riak, and collaborative
+editors (CRDT-based text types underpin Figma's multiplayer).
+
+WRITE AMPLIFICATION IN LSM TREES
+
+Write amplification is the ratio of bytes written to disk to bytes written by the application. In
+LSM trees, the same data is written multiple times: once to the WAL, once to the memtable, once to
+L0 on flush, and then again on each compaction pass as it moves through levels. In leveled
+compaction, a byte written at L0 may be rewritten at L1 (10x L0 size), then L2 (10x L1), and so on.
+Total write amplification can reach 10-30x in the worst case. Tiered compaction reduces write
+amplification at the cost of higher read amplification (more SSTables to check per read) and space
+amplification (obsolete data stays around longer). RocksDB exposes compaction_style, max_bytes_for_
+level_base, and level_multiplier to tune the tradeoff. Write amplification directly impacts SSD
+endurance, since flash cells have a finite write cycle count.
