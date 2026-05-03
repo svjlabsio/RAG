@@ -1,0 +1,5 @@
+I want to create a rag application. i will be using it as a porfolio, so it has to be simple, no needed for multitenancy, autorizations, RBAC etc. make it simple. Use strealit for frontend, neon as postgres database.
+
+The application ui should focus on demo and walktrough the user in doing tasks like uploading files (provide sample files), asing questions and in each step explain how the application coded and how it works.
+
+Audiance for the application are not normal users but expererience Software engineers, so the explations should focus on technical

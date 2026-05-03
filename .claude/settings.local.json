@@ -6,5 +6,10 @@
       "WebFetch(domain:supabase.com)",
       "Bash(git *)"
     ]
+  },
+  "includeCoAuthoredBy": false,
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }
